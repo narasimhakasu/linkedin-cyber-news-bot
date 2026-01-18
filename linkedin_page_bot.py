@@ -1,12 +1,11 @@
-print(os.environ.keys())
-
+import os
 import requests
 from datetime import datetime
 
 # =========================
 # CONFIG
 # =========================
-import os
+print(os.environ.keys())
 
 ACCESS_TOKEN = os.environ["LINKEDIN_ACCESS_TOKEN"]
 PERSON_URN = os.environ["PERSON_URN"]
@@ -217,6 +216,7 @@ if __name__ == "__main__":
     asset,
     news["link"]
 )
+
 
 
 
