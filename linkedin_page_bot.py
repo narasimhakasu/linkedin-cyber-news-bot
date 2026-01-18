@@ -4,9 +4,12 @@ from datetime import datetime
 # =========================
 # CONFIG
 # =========================
-NEWS_API_KEY = "ffcbc7221258486ba06ae8e8b3eeee46"
-ACCESS_TOKEN = "AQXFPpRGC3T-zhxMOlnyyatCQhWg884PPONqiuS32nMSE1PqYecBP2_K_jBdjIXGz3ag07_Ux8Hige9mAYKjEhKVQ7GeAoI8LQPs3BGEwh4hlJN8FAdjJbkveLxNI3pbqEa032eelNGa5PbvhhMNRvheEtJc9iAnAsyjIaPTb_38CXfIfZXp47I3E0rT-E13n-jvtWiipReCk1As0Pmp2Ei3Fnx6yuuOIxcv_TYUpjd45Od14Ie7n7OUNKUHU6pxNHlzAzdJ-VAlsuzHdwiWZCDbYdJRv9tFx04iBKnwIDoGtdiAMVMrE1yD1ElkT4R8T6Y8CdY0BWWvGPtN8n0rArDQ03p_AA"
-PERSON_URN = "urn:li:person:C5dGzomSRl"
+import os
+
+ACCESS_TOKEN = os.environ["LINKEDIN_ACCESS_TOKEN"]
+PERSON_URN = os.environ["PERSON_URN"]
+NEWS_API_KEY = os.environ["NEWS_API_KEY"]
+
 
 NEWS_API_URL = "https://newsapi.org/v2/everything"
 
@@ -212,4 +215,5 @@ if __name__ == "__main__":
     asset,
     news["link"]
 )
+
 
