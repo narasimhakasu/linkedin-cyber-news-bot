@@ -1,3 +1,5 @@
+print(os.environ.keys())
+
 import requests
 from datetime import datetime
 
@@ -215,5 +217,6 @@ if __name__ == "__main__":
     asset,
     news["link"]
 )
+
 
 
