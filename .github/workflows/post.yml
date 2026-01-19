@@ -1,28 +1,45 @@
-name: LinkedIn Cyber News Bot
+name: LinkedIn Cybersecurity Bot
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/15 * * * *"
-
-
+    - cron: "0 */6 * * *"   # every 6 hours
 
 jobs:
-  run-bot:
+  post:
     runs-on: ubuntu-latest
 
-    env:
-      LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
-      PERSON_URN: ${{ secrets.PERSON_URN }}
-      NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
-
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          python-version: "3.11"
+          persist-credentials: true
+          fetch-depth: 0
 
-      - run: pip install -r requirements.txt
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
 
-      - run: python linkedin_page_bot.py
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run LinkedIn bot
+        env:
+          LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
+          PERSON_URN: ${{ secrets.PERSON_URN }}
+          NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
+        run: |
+          python linked_bot.py
+
+      # 🔥 THIS IS THE MISSING PIECE 🔥
+      - name: Commit posted articles
+        run: |
+          git status
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add posted_articles.json
+          git commit -m "Update posted articles" || echo "No changes to commit"
+          git push
+
