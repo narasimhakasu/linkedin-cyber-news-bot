@@ -65,23 +65,23 @@ def fetch_news():
             "darkreading.com,"
             "securityweek.com,"
             "threatpost.com"
+            "csis.org,"
+            "nist.gov,"
+            "cloudflare.com"
         ),
         "q": (
-            '"cybersecurity" OR "information security" OR '
-            '"data breach" OR "ransomware" OR "malware" OR '
-            '"zero trust" OR "cloud security" OR '
-            '"AI security" OR "XDR" OR "SASE" OR '
-            '"security framework" OR "DevSecOps"'
-        ),
+            'security OR cyber OR breach OR ransomware OR '
+            'cloud OR AI OR zero-trust OR framework OR DevSecOps'
+            ),
         "language": "en",
         "sortBy": "publishedAt",
-        "pageSize": 15,
+        "pageSize": 30,
         "apiKey": NEWS_API_KEY
     }
 
     # ⏱️ Only last 24 hours
     from datetime import timedelta
-    params["from"] = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
+    params["from"] = (datetime.utcnow() - timedelta(days=3)).strftime("%Y-%m-%d")
 
     r = requests.get(NEWS_API_URL, params=params)
     data = r.json()
@@ -252,6 +252,7 @@ if __name__ == "__main__":
 
     # ✅ Mark ONLY after successful post
     mark_as_posted(news["link"])
+
 
 
 
