@@ -61,16 +61,26 @@ def fetch_news():
             "threatpost.com,"
             "csis.org,"
             "nist.gov,"
-            "cloudflare.com"
+            "cloudflare.com,"
+            "wired.com,"
+            "arstechnica.com,"
+            "techcrunch.com,"
+            "venturebeat.com,"
+            "infosecurity-magazine.com,"
+            "cisa.gov,"
+            "mitre.org,"
+            "sans.org"
         ),
         "q": (
-            "security OR cyber OR breach OR ransomware OR "
-            "cloud OR AI OR zero-trust OR framework OR DevSecOps"
+            "cybersecurity OR security OR cyber attack OR breach OR "
+            "ransomware OR vulnerability OR zero-day OR malware OR "
+            "cloud security OR AI security OR DevSecOps OR "
+            "zero trust OR framework OR compliance OR mitigation"
         ),
         "language": "en",
         "sortBy": "publishedAt",
-        "pageSize": 30,
-        "from": (datetime.utcnow() - timedelta(days=3)).strftime("%Y-%m-%d"),
+        "pageSize": 50,
+        "from": (datetime.utcnow() - timedelta(days=7)).strftime("%Y-%m-%d"),
         "apiKey": NEWS_API_KEY
     }
 
@@ -87,13 +97,14 @@ def fetch_news():
 
     ADVANCEMENT_TERMS = [
         "framework", "architecture", "zero trust", "cloud",
-        "ai", "automation", "platform", "defense",
-        "mitigation", "best practice", "strategy", "solution"
+        "ai", "automation", "platform", "defsecops",
+        "mitigation", "best practice", "strategy",
+        "compliance", "standard", "guideline"
     ]
 
     EXCLUDE_TERMS = [
-        "arrest", "interpol", "europol",
-        "sentenced", "trial", "court", "gang"
+        "arrest", "interpol", "europol", "sentenced",
+        "trial", "court", "gang", "police"
     ]
 
     for article in data["articles"]:
@@ -127,6 +138,7 @@ def fetch_news():
         }
 
     return None
+
 
 # =========================
 # REGISTER IMAGE UPLOAD
@@ -233,3 +245,4 @@ if __name__ == "__main__":
         print("Posted successfully.")
     else:
         print("Post failed.")
+
