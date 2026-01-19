@@ -31,7 +31,8 @@ jobs:
           PERSON_URN: ${{ secrets.PERSON_URN }}
           NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
         run: |
-          python linked_bot.py
+          python linkedin_page_bot.py
+
 
       # 🔥 THIS IS THE MISSING PIECE 🔥
       - name: Commit posted articles
