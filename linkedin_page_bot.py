@@ -5,7 +5,21 @@ from datetime import datetime
 # =========================
 # CONFIG
 # =========================
-print(os.environ.keys())
+LAST_POST_FILE = "last_posted.txt"
+
+
+def already_posted(url):
+    if not os.path.exists(LAST_POST_FILE):
+        return False
+
+    with open(LAST_POST_FILE, "r") as f:
+        return url.strip() in f.read().splitlines()
+
+
+def mark_as_posted(url):
+    with open(LAST_POST_FILE, "a") as f:
+        f.write(url.strip() + "\n")
+
 
 ACCESS_TOKEN = os.environ["LINKEDIN_ACCESS_TOKEN"]
 PERSON_URN = os.environ["PERSON_URN"]
@@ -65,6 +79,9 @@ def fetch_news():
         "apiKey": NEWS_API_KEY
     }
 
+    from datetime import timedelta
+    params["from"] = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
+
     r = requests.get(NEWS_API_URL, params=params)
     data = r.json()
 
@@ -90,30 +107,44 @@ def fetch_news():
     ]
 
     for article in data["articles"]:
-        title = (article.get("title") or "").lower()
-        desc = (article.get("description") or "").lower()
-        text = f"{title} {desc}"
+    title = (article.get("title") or "").lower()
+    desc = (article.get("description") or "").lower()
+    text = f"{title} {desc}"
 
-        # Hard exclusions
-        if any(x in text for x in EXCLUDE_TERMS):
-            continue
+    if not article.get("url"):
+        continue
 
-        # Must match at least ONE lane
-        if not (
-            any(x in text for x in THREAT_TERMS) or
-            any(x in text for x in ADVANCEMENT_TERMS)
-        ):
-            continue
+    # 🚫 Skip duplicates FIRST
+    if already_posted(article["url"]):
+        print("Skipping duplicate:", article["title"])
+        continue
 
-        if not article.get("urlToImage"):
-            continue
+    # Hard exclusions
+    if any(x in text for x in EXCLUDE_TERMS):
+        continue
 
-        return {
-                    "title": article["title"],
-                    "summary": clean_summary(article["description"])[:300],
-                    "image_url": article["urlToImage"],
-                    "link": article["url"]
-                }
+    # Must match at least ONE lane
+    if not (
+        any(x in text for x in THREAT_TERMS) or
+        any(x in text for x in ADVANCEMENT_TERMS)
+    ):
+        continue
+
+    if not article.get("urlToImage"):
+        continue
+
+    print("Selected new article:", article["title"])
+
+    return {
+        "title": article["title"],
+        "summary": clean_summary(article["description"])[:300],
+        "image_url": article["urlToImage"],
+        "link": article["url"]
+    }
+
+print("No new suitable articles found.")
+return None
+
 
 
     raise Exception("No suitable cybersecurity article found")
@@ -208,14 +239,24 @@ def create_post(title, summary, asset, link):
 # =========================
 if __name__ == "__main__":
     news = fetch_news()
+
+    if not news:
+        print("Nothing new to post. Exiting.")
+        exit()
+
     upload_url, asset = register_upload()
     upload_image(upload_url, news["image_url"])
     create_post(
-    news["title"],
-    news["summary"],
-    asset,
-    news["link"]
-)
+        news["title"],
+        news["summary"],
+        asset,
+        news["link"]
+    )
+
+    # ✅ Mark ONLY after successful post
+    mark_as_posted(news["link"])
+
+
 
 
 
