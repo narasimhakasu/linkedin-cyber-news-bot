@@ -79,6 +79,7 @@ def fetch_news():
         "apiKey": NEWS_API_KEY
     }
 
+    # ⏱️ Only last 24 hours
     from datetime import timedelta
     params["from"] = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
 
@@ -88,7 +89,6 @@ def fetch_news():
     if not data.get("articles"):
         raise Exception("No articles returned")
 
-    # --- CONTENT LANES ---
     THREAT_TERMS = [
         "breach", "attack", "exploited", "vulnerability",
         "zero-day", "malware", "ransomware", "phishing"
@@ -107,47 +107,44 @@ def fetch_news():
     ]
 
     for article in data["articles"]:
-    title = (article.get("title") or "").lower()
-    desc = (article.get("description") or "").lower()
-    text = f"{title} {desc}"
+        title = (article.get("title") or "").lower()
+        desc = (article.get("description") or "").lower()
+        text = f"{title} {desc}"
 
-    if not article.get("url"):
-        continue
+        if not article.get("url"):
+            continue
 
-    # 🚫 Skip duplicates FIRST
-    if already_posted(article["url"]):
-        print("Skipping duplicate:", article["title"])
-        continue
+        # 🚫 Skip duplicates FIRST
+        if already_posted(article["url"]):
+            print("Skipping duplicate:", article["title"])
+            continue
 
-    # Hard exclusions
-    if any(x in text for x in EXCLUDE_TERMS):
-        continue
+        # Hard exclusions
+        if any(x in text for x in EXCLUDE_TERMS):
+            continue
 
-    # Must match at least ONE lane
-    if not (
-        any(x in text for x in THREAT_TERMS) or
-        any(x in text for x in ADVANCEMENT_TERMS)
-    ):
-        continue
+        # Must match at least ONE lane
+        if not (
+            any(x in text for x in THREAT_TERMS) or
+            any(x in text for x in ADVANCEMENT_TERMS)
+        ):
+            continue
 
-    if not article.get("urlToImage"):
-        continue
+        if not article.get("urlToImage"):
+            continue
 
-    print("Selected new article:", article["title"])
+        print("Selected new article:", article["title"])
 
-    return {
-        "title": article["title"],
-        "summary": clean_summary(article["description"])[:300],
-        "image_url": article["urlToImage"],
-        "link": article["url"]
-    }
+        return {
+            "title": article["title"],
+            "summary": clean_summary(article["description"])[:300],
+            "image_url": article["urlToImage"],
+            "link": article["url"]
+        }
 
-print("No new suitable articles found.")
-return None
-
-
-
-    raise Exception("No suitable cybersecurity article found")
+    # ✅ This must be OUTSIDE the loop
+    print("No new suitable articles found.")
+    return None
 
 
 
@@ -255,6 +252,7 @@ if __name__ == "__main__":
 
     # ✅ Mark ONLY after successful post
     mark_as_posted(news["link"])
+
 
 
 
