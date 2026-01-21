@@ -157,8 +157,12 @@ def fetch_news(domain, posted, global_posted):
     ]
 
     AI_REQUIRED = [
-        "model", "ml", "machine learning", "llm",
-        "training", "inference", "software", "platform"
+        "ai", "artificial intelligence",
+    "model", "ml", "machine learning",
+    "llm", "large language model",
+    "neural", "deep learning",
+    "automation", "intelligence",
+    "software", "platform", "tool"
     ]
 
     AI_EXCLUDE = [
@@ -168,7 +172,13 @@ def fetch_news(domain, posted, global_posted):
     ]
 
     CLOUD_REQUIRED = ["aws", "azure", "gcp", "cloud", "outage", "region"]
-    DATA_REQUIRED = ["pipeline", "etl", "warehouse", "databricks", "snowflake"]
+    DATA_REQUIRED = [
+    "data", "analytics", "engineering",
+    "pipeline", "etl", "elt",
+    "warehouse", "lakehouse",
+    "Databricks", "Snowflake",
+    "bigquery", "redshift"
+    ]
     DATA_EXCLUDE = ["survey", "poll", "census", "government data"]
 
     for article in data["articles"]:
@@ -333,3 +343,4 @@ if __name__ == "__main__":
 
     if not posted_successfully:
         print("❌ No article posted in this run.")
+
