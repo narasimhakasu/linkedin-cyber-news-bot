@@ -4,10 +4,77 @@ import requests
 from datetime import datetime, timedelta
 
 # =========================
-# CONFIG
+# DOMAIN ROTATION CONFIG
 # =========================
-POSTED_FILE = "posted_articles.json"
 
+DOMAINS = ["cybersecurity", "cloud", "ai", "data"]
+ROTATION_FILE = "rotation_state.json"
+
+DOMAIN_CONFIGS = {
+    "cybersecurity": {
+        "domains": [
+            "thehackernews.com", "bleepingcomputer.com", "darkreading.com",
+            "securityweek.com", "threatpost.com", "zdnet.com",
+            "cloudflare.com", "cisa.gov", "nist.gov"
+        ],
+        "query": (
+            "cybersecurity OR cyber attack OR data breach OR ransomware "
+            "OR zero-day OR vulnerability OR exploited OR malware "
+            "OR security advisory OR patch OR mitigation OR zero trust"
+        ),
+        "title": "🔐 Cybersecurity Update",
+        "hashtags": "#CyberSecurity #InfoSec #SecurityNews"
+    },
+
+    "cloud": {
+        "domains": [
+            "aws.amazon.com", "cloud.google.com", "azure.microsoft.com",
+            "cloudflare.com", "zdnet.com", "techcrunch.com"
+        ],
+        "query": (
+            "AWS OR Azure OR Google Cloud OR cloud outage "
+            "OR cloud service OR infrastructure issue "
+            "OR cloud security OR misconfiguration "
+            "OR service disruption OR downtime"
+        ),
+        "title": "☁️ Cloud Update",
+        "hashtags": "#CloudComputing #AWS #Azure #GCP"
+    },
+
+    "ai": {
+        "domains": [
+            "openai.com", "deepmind.google", "ai.googleblog.com",
+            "venturebeat.com", "techcrunch.com", "wired.com"
+        ],
+        "query": (
+            "artificial intelligence OR AI model OR LLM "
+            "OR generative AI OR AI tool "
+            "OR AI security OR AI safety "
+            "OR enterprise AI OR automation"
+        ),
+        "title": "🤖 AI Update",
+        "hashtags": "#AI #ArtificialIntelligence #Automation"
+    },
+
+    "data": {
+        "domains": [
+            "databricks.com", "snowflake.com", "cloud.google.com",
+            "aws.amazon.com", "venturebeat.com", "zdnet.com"
+        ],
+        "query": (
+            "data engineering OR data pipeline OR ETL OR ELT "
+            "OR analytics platform OR big data "
+            "OR Databricks OR Snowflake OR BigQuery "
+            "OR Redshift OR data warehouse"
+        ),
+        "title": "📊 Data Update",
+        "hashtags": "#DataEngineering #DataAnalytics #BigData"
+    }
+}
+
+# =========================
+# ENV CONFIG
+# =========================
 ACCESS_TOKEN = os.environ["LINKEDIN_ACCESS_TOKEN"]
 PERSON_URN = os.environ["PERSON_URN"]
 NEWS_API_KEY = os.environ["NEWS_API_KEY"]
@@ -20,17 +87,31 @@ HEADERS = {
 }
 
 # =========================
-# POSTED ARTICLES STORAGE
+# ROTATION STATE
 # =========================
-def load_posted():
-    if not os.path.exists(POSTED_FILE):
+def load_rotation_index():
+    if not os.path.exists(ROTATION_FILE):
+        return 0
+    with open(ROTATION_FILE, "r") as f:
+        return json.load(f).get("index", 0)
+
+
+def save_rotation_index(index):
+    with open(ROTATION_FILE, "w") as f:
+        json.dump({"index": index}, f)
+
+# =========================
+# POSTED STORAGE (PER DOMAIN)
+# =========================
+def load_posted(file):
+    if not os.path.exists(file):
         return set()
-    with open(POSTED_FILE, "r") as f:
+    with open(file, "r") as f:
         return set(json.load(f))
 
 
-def save_posted(posted):
-    with open(POSTED_FILE, "w") as f:
+def save_posted(file, posted):
+    with open(file, "w") as f:
         json.dump(list(posted), f, indent=2)
 
 # =========================
@@ -46,37 +127,14 @@ def clean_summary(text):
     return text.strip()
 
 # =========================
-# FETCH NEWS
+# FETCH NEWS (DOMAIN BASED)
 # =========================
-def fetch_news():
-    posted = load_posted()
+def fetch_news(domain, posted):
+    config = DOMAIN_CONFIGS[domain]
 
     params = {
-        "domains": (
-            "thehackernews.com,"
-            "bleepingcomputer.com,"
-            "zdnet.com,"
-            "darkreading.com,"
-            "securityweek.com,"
-            "threatpost.com,"
-            "csis.org,"
-            "nist.gov,"
-            "cloudflare.com,"
-            "wired.com,"
-            "arstechnica.com,"
-            "techcrunch.com,"
-            "venturebeat.com,"
-            "infosecurity-magazine.com,"
-            "cisa.gov,"
-            "mitre.org,"
-            "sans.org"
-        ),
-        "q": (
-            "cybersecurity OR security OR cyber attack OR breach OR "
-            "ransomware OR vulnerability OR zero-day OR malware OR "
-            "cloud security OR AI security OR DevSecOps OR "
-            "zero trust OR framework OR compliance OR mitigation"
-        ),
+        "domains": ",".join(config["domains"]),
+        "q": config["query"],
         "language": "en",
         "sortBy": "publishedAt",
         "pageSize": 50,
@@ -90,21 +148,9 @@ def fetch_news():
     if not data.get("articles"):
         return None
 
-    THREAT_TERMS = [
-        "breach", "attack", "exploited", "vulnerability",
-        "zero-day", "malware", "ransomware", "phishing"
-    ]
-
-    ADVANCEMENT_TERMS = [
-        "framework", "architecture", "zero trust", "cloud",
-        "ai", "automation", "platform", "defsecops",
-        "mitigation", "best practice", "strategy",
-        "compliance", "standard", "guideline"
-    ]
-
     EXCLUDE_TERMS = [
-        "arrest", "interpol", "europol", "sentenced",
-        "trial", "court", "gang", "police"
+        "arrest", "interpol", "europol",
+        "sentenced", "trial", "court", "gang", "police"
     ]
 
     for article in data["articles"]:
@@ -112,23 +158,13 @@ def fetch_news():
         if not url or url in posted:
             continue
 
-        title = (article.get("title") or "").lower()
-        desc = (article.get("description") or "").lower()
-        text = f"{title} {desc}"
+        text = f"{article.get('title','').lower()} {article.get('description','').lower()}"
 
         if any(x in text for x in EXCLUDE_TERMS):
             continue
 
-        if not (
-            any(x in text for x in THREAT_TERMS) or
-            any(x in text for x in ADVANCEMENT_TERMS)
-        ):
-            continue
-
         if not article.get("urlToImage"):
             continue
-
-        print("Selected NEW article:", article["title"])
 
         return {
             "title": article["title"],
@@ -139,13 +175,11 @@ def fetch_news():
 
     return None
 
-
 # =========================
-# REGISTER IMAGE UPLOAD
+# LINKEDIN HELPERS
 # =========================
 def register_upload():
     url = "https://api.linkedin.com/v2/assets?action=registerUpload"
-
     payload = {
         "registerUploadRequest": {
             "recipes": ["urn:li:digitalmediaRecipe:feedshare-image"],
@@ -157,42 +191,30 @@ def register_upload():
         }
     }
 
-    r = requests.post(
-        url,
-        headers={**HEADERS, "Content-Type": "application/json"},
-        json=payload
-    )
-
+    r = requests.post(url, headers={**HEADERS, "Content-Type": "application/json"}, json=payload)
     data = r.json()["value"]
-    upload_url = data["uploadMechanism"][
-        "com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"
-    ]["uploadUrl"]
+    upload_url = data["uploadMechanism"]["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"]["uploadUrl"]
+    return upload_url, data["asset"]
 
-    asset = data["asset"]
-    return upload_url, asset
 
-# =========================
-# UPLOAD IMAGE
-# =========================
 def upload_image(upload_url, image_url):
     image = requests.get(image_url).content
-    headers = {
+    r = requests.put(upload_url, headers={
         "Authorization": f"Bearer {ACCESS_TOKEN}",
         "Content-Type": "application/octet-stream"
-    }
-    r = requests.put(upload_url, headers=headers, data=image)
-    return r.status_code == 201 or r.status_code == 200
+    }, data=image)
+    return r.status_code in (200, 201)
 
-# =========================
-# CREATE POST
-# =========================
-def create_post(title, summary, asset, link):
+
+def create_post(domain, news, asset):
+    cfg = DOMAIN_CONFIGS[domain]
+
     text = (
-        f"🔐 Cybersecurity Update | {datetime.now().strftime('%d %b %Y')}\n\n"
-        f"📰 {title}\n\n"
-        f"{summary}\n\n"
-        f"🔗 Read more: {link}\n\n"
-        f"#CyberSecurity #InfoSec #CloudSecurity #DevSecOps"
+        f"{cfg['title']} | {datetime.now().strftime('%d %b %Y')}\n\n"
+        f"📰 {news['title']}\n\n"
+        f"{news['summary']}\n\n"
+        f"🔗 Read more: {news['link']}\n\n"
+        f"{cfg['hashtags']}"
     )
 
     payload = {
@@ -205,44 +227,44 @@ def create_post(title, summary, asset, link):
                 "media": [{
                     "status": "READY",
                     "media": asset,
-                    "title": {"text": "Cybersecurity Update"}
+                    "title": {"text": cfg["title"]}
                 }]
             }
         },
-        "visibility": {
-            "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
-        }
+        "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"}
     }
 
-    r = requests.post(
-        "https://api.linkedin.com/v2/ugcPosts",
-        headers={**HEADERS, "Content-Type": "application/json"},
-        json=payload
-    )
-
+    r = requests.post("https://api.linkedin.com/v2/ugcPosts",
+                      headers={**HEADERS, "Content-Type": "application/json"},
+                      json=payload)
     return r.status_code == 201
 
 # =========================
 # MAIN
 # =========================
 if __name__ == "__main__":
-    posted = load_posted()
-    news = fetch_news()
+    rotation_index = load_rotation_index()
+    domain = DOMAINS[rotation_index % len(DOMAINS)]
 
+    print(f"🔄 Selected domain: {domain}")
+
+    posted_file = f"posted_articles_{domain}.json"
+    posted = load_posted(posted_file)
+
+    news = fetch_news(domain, posted)
     if not news:
         print("No new article found.")
         exit()
 
     upload_url, asset = register_upload()
-
     if not upload_image(upload_url, news["image_url"]):
         print("Image upload failed.")
         exit()
 
-    if create_post(news["title"], news["summary"], asset, news["link"]):
+    if create_post(domain, news, asset):
         posted.add(news["link"])
-        save_posted(posted)
-        print("Posted successfully.")
+        save_posted(posted_file, posted)
+        save_rotation_index(rotation_index + 1)
+        print("✅ Posted successfully.")
     else:
         print("Post failed.")
-
