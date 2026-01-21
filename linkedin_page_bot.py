@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 
 DOMAINS = ["cybersecurity", "cloud", "ai", "data"]
 ROTATION_FILE = "rotation_state.json"
+GLOBAL_POSTED_FILE = "posted_articles_global.json"
 
 DOMAIN_CONFIGS = {
     "cybersecurity": {
@@ -91,7 +92,7 @@ HEADERS = {
 }
 
 # =========================
-# ROTATION STATE
+# STATE HELPERS
 # =========================
 
 def load_rotation_index():
@@ -105,20 +106,17 @@ def save_rotation_index(index):
     with open(ROTATION_FILE, "w") as f:
         json.dump({"index": index}, f)
 
-# =========================
-# POSTED STORAGE
-# =========================
 
-def load_posted(file):
+def load_json_set(file):
     if not os.path.exists(file):
         return set()
     with open(file, "r") as f:
         return set(json.load(f))
 
 
-def save_posted(file, posted):
+def save_json_set(file, data):
     with open(file, "w") as f:
-        json.dump(list(posted), f, indent=2)
+        json.dump(list(data), f, indent=2)
 
 # =========================
 # CLEAN SUMMARY
@@ -129,15 +127,13 @@ def clean_summary(text):
         return ""
     if "[" in text:
         text = text.split("[")[0]
-    while text.endswith(".") or text.endswith("…"):
-        text = text[:-1]
-    return text.strip()
+    return text.rstrip(".…").strip()
 
 # =========================
-# FETCH NEWS (ALL DOMAINS TIGHT)
+# FETCH NEWS
 # =========================
 
-def fetch_news(domain, posted):
+def fetch_news(domain, posted, global_posted):
     config = DOMAIN_CONFIGS[domain]
 
     params = {
@@ -150,9 +146,7 @@ def fetch_news(domain, posted):
         "apiKey": NEWS_API_KEY
     }
 
-    r = requests.get(NEWS_API_URL, params=params)
-    data = r.json()
-
+    data = requests.get(NEWS_API_URL, params=params).json()
     if not data.get("articles"):
         return None
 
@@ -164,9 +158,7 @@ def fetch_news(domain, posted):
 
     AI_REQUIRED = [
         "model", "ml", "machine learning", "llm",
-        "neural", "training", "inference",
-        "dataset", "algorithm", "software",
-        "platform", "enterprise"
+        "training", "inference", "software", "platform"
     ]
 
     AI_EXCLUDE = [
@@ -175,27 +167,13 @@ def fetch_news(domain, posted):
         "astrophysics", "interstellar", "seti"
     ]
 
-    CLOUD_REQUIRED = [
-        "aws", "azure", "gcp", "cloud",
-        "infrastructure", "service",
-        "outage", "downtime", "region"
-    ]
-
-    DATA_REQUIRED = [
-        "pipeline", "etl", "elt", "warehouse",
-        "databricks", "snowflake", "bigquery",
-        "analytics", "data platform"
-    ]
-
-    DATA_EXCLUDE = [
-        "survey", "poll", "report says",
-        "government data", "census",
-        "statistics office"
-    ]
+    CLOUD_REQUIRED = ["aws", "azure", "gcp", "cloud", "outage", "region"]
+    DATA_REQUIRED = ["pipeline", "etl", "warehouse", "databricks", "snowflake"]
+    DATA_EXCLUDE = ["survey", "poll", "census", "government data"]
 
     for article in data["articles"]:
         url = article.get("url")
-        if not url or url in posted:
+        if not url or url in posted or url in global_posted:
             continue
 
         text = f"{article.get('title','').lower()} {article.get('description','').lower()}"
@@ -209,9 +187,8 @@ def fetch_news(domain, posted):
             if any(x in text for x in AI_EXCLUDE):
                 continue
 
-        if domain == "cloud":
-            if not any(x in text for x in CLOUD_REQUIRED):
-                continue
+        if domain == "cloud" and not any(x in text for x in CLOUD_REQUIRED):
+            continue
 
         if domain == "data":
             if not any(x in text for x in DATA_REQUIRED):
@@ -232,11 +209,10 @@ def fetch_news(domain, posted):
     return None
 
 # =========================
-# LINKEDIN HELPERS
+# LINKEDIN API
 # =========================
 
 def register_upload():
-    url = "https://api.linkedin.com/v2/assets?action=registerUpload"
     payload = {
         "registerUploadRequest": {
             "recipes": ["urn:li:digitalmediaRecipe:feedshare-image"],
@@ -248,18 +224,28 @@ def register_upload():
         }
     }
 
-    r = requests.post(url, headers={**HEADERS, "Content-Type": "application/json"}, json=payload)
+    r = requests.post(
+        "https://api.linkedin.com/v2/assets?action=registerUpload",
+        headers={**HEADERS, "Content-Type": "application/json"},
+        json=payload
+    )
     data = r.json()["value"]
-    upload_url = data["uploadMechanism"]["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"]["uploadUrl"]
-    return upload_url, data["asset"]
+    return (
+        data["uploadMechanism"]["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"]["uploadUrl"],
+        data["asset"]
+    )
 
 
 def upload_image(upload_url, image_url):
     image = requests.get(image_url).content
-    r = requests.put(upload_url, headers={
-        "Authorization": f"Bearer {ACCESS_TOKEN}",
-        "Content-Type": "application/octet-stream"
-    }, data=image)
+    r = requests.put(
+        upload_url,
+        headers={
+            "Authorization": f"Bearer {ACCESS_TOKEN}",
+            "Content-Type": "application/octet-stream"
+        },
+        data=image
+    )
     return r.status_code in (200, 201)
 
 
@@ -296,18 +282,13 @@ def create_post(domain, news, asset):
         headers={**HEADERS, "Content-Type": "application/json"},
         json=payload
     )
-    if r.status_code != 201:
+
+    if r.status_code != 201 or "id" not in r.json():
         print("❌ LinkedIn post failed:", r.text)
         return False
 
-    response = r.json()
-    if "id" not in response:
-        print("❌ LinkedIn post has no ID, treating as failure:", response)
-        return False
-
-    print("📌 LinkedIn post ID:", response["id"])
+    print("📌 LinkedIn post ID:", r.json()["id"])
     return True
-
 
 # =========================
 # MAIN
@@ -315,22 +296,22 @@ def create_post(domain, news, asset):
 
 if __name__ == "__main__":
     rotation_index = load_rotation_index()
-    total_domains = len(DOMAINS)
+    global_posted = load_json_set(GLOBAL_POSTED_FILE)
 
     posted_successfully = False
 
-    for attempt in range(total_domains):
-        domain_index = (rotation_index + attempt) % total_domains
+    for i in range(len(DOMAINS)):
+        domain_index = (rotation_index + i) % len(DOMAINS)
         domain = DOMAINS[domain_index]
 
         print(f"🔄 Trying domain: {domain}")
 
-        posted_file = f"posted_articles_{domain}.json"
-        posted = load_posted(posted_file)
+        domain_file = f"posted_articles_{domain}.json"
+        domain_posted = load_json_set(domain_file)
 
-        news = fetch_news(domain, posted)
+        news = fetch_news(domain, domain_posted, global_posted)
         if not news:
-            print(f"No article found for {domain}, trying next domain.")
+            print(f"No article for {domain}, moving on.")
             continue
 
         upload_url, asset = register_upload()
@@ -339,21 +320,16 @@ if __name__ == "__main__":
             continue
 
         if create_post(domain, news, asset):
-            posted.add(news["link"])
-            save_posted(posted_file, posted)
+            domain_posted.add(news["link"])
+            global_posted.add(news["link"])
 
-            # ✅ advance rotation to NEXT domain after the one we posted
+            save_json_set(domain_file, domain_posted)
+            save_json_set(GLOBAL_POSTED_FILE, global_posted)
             save_rotation_index(domain_index + 1)
 
             print(f"✅ Confirmed LinkedIn post for domain: {domain}")
             posted_successfully = True
             break
 
-        else:
-            print("Post failed, trying next domain.")
-
     if not posted_successfully:
-        print("❌ No articles posted for any domain.")
-
-
-
+        print("❌ No article posted in this run.")
