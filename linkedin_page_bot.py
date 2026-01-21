@@ -296,7 +296,18 @@ def create_post(domain, news, asset):
         headers={**HEADERS, "Content-Type": "application/json"},
         json=payload
     )
-    return r.status_code == 201
+    if r.status_code != 201:
+        print("❌ LinkedIn post failed:", r.text)
+        return False
+
+    response = r.json()
+    if "id" not in response:
+        print("❌ LinkedIn post has no ID, treating as failure:", response)
+        return False
+
+    print("📌 LinkedIn post ID:", response["id"])
+    return True
+
 
 # =========================
 # MAIN
@@ -334,7 +345,7 @@ if __name__ == "__main__":
             # ✅ advance rotation to NEXT domain after the one we posted
             save_rotation_index(domain_index + 1)
 
-            print(f"✅ Posted successfully for domain: {domain}")
+            print(f"✅ Confirmed LinkedIn post for domain: {domain}")
             posted_successfully = True
             break
 
@@ -343,5 +354,6 @@ if __name__ == "__main__":
 
     if not posted_successfully:
         print("❌ No articles posted for any domain.")
+
 
 
