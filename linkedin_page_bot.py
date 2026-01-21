@@ -304,27 +304,44 @@ def create_post(domain, news, asset):
 
 if __name__ == "__main__":
     rotation_index = load_rotation_index()
-    domain = DOMAINS[rotation_index % len(DOMAINS)]
+    total_domains = len(DOMAINS)
 
-    print(f"🔄 Selected domain: {domain}")
+    posted_successfully = False
 
-    posted_file = f"posted_articles_{domain}.json"
-    posted = load_posted(posted_file)
+    for attempt in range(total_domains):
+        domain_index = (rotation_index + attempt) % total_domains
+        domain = DOMAINS[domain_index]
 
-    news = fetch_news(domain, posted)
-    if not news:
-        print("No new article found.")
-        exit()
+        print(f"🔄 Trying domain: {domain}")
 
-    upload_url, asset = register_upload()
-    if not upload_image(upload_url, news["image_url"]):
-        print("Image upload failed.")
-        exit()
+        posted_file = f"posted_articles_{domain}.json"
+        posted = load_posted(posted_file)
 
-    if create_post(domain, news, asset):
-        posted.add(news["link"])
-        save_posted(posted_file, posted)
-        save_rotation_index(rotation_index + 1)
-        print("✅ Posted successfully.")
-    else:
-        print("Post failed.")
+        news = fetch_news(domain, posted)
+        if not news:
+            print(f"No article found for {domain}, trying next domain.")
+            continue
+
+        upload_url, asset = register_upload()
+        if not upload_image(upload_url, news["image_url"]):
+            print("Image upload failed, trying next domain.")
+            continue
+
+        if create_post(domain, news, asset):
+            posted.add(news["link"])
+            save_posted(posted_file, posted)
+
+            # ✅ advance rotation to NEXT domain after the one we posted
+            save_rotation_index(domain_index + 1)
+
+            print(f"✅ Posted successfully for domain: {domain}")
+            posted_successfully = True
+            break
+
+        else:
+            print("Post failed, trying next domain.")
+
+    if not posted_successfully:
+        print("❌ No articles posted for any domain.")
+
+
