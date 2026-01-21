@@ -47,10 +47,13 @@ DOMAIN_CONFIGS = {
             "venturebeat.com", "techcrunch.com", "wired.com"
         ],
         "query": (
-            "artificial intelligence OR AI model OR LLM "
-            "OR generative AI OR AI tool "
-            "OR AI security OR AI safety "
-            "OR enterprise AI OR automation"
+            "artificial intelligence AND (model OR system OR software OR platform) "
+            "OR machine learning "
+            "OR LLM OR large language model "
+            "OR generative AI "
+            "OR AI tool "
+            "OR enterprise AI "
+            "OR AI platform"
         ),
         "title": "🤖 AI Update",
         "hashtags": "#AI #ArtificialIntelligence #Automation"
@@ -75,6 +78,7 @@ DOMAIN_CONFIGS = {
 # =========================
 # ENV CONFIG
 # =========================
+
 ACCESS_TOKEN = os.environ["LINKEDIN_ACCESS_TOKEN"]
 PERSON_URN = os.environ["PERSON_URN"]
 NEWS_API_KEY = os.environ["NEWS_API_KEY"]
@@ -89,6 +93,7 @@ HEADERS = {
 # =========================
 # ROTATION STATE
 # =========================
+
 def load_rotation_index():
     if not os.path.exists(ROTATION_FILE):
         return 0
@@ -101,8 +106,9 @@ def save_rotation_index(index):
         json.dump({"index": index}, f)
 
 # =========================
-# POSTED STORAGE (PER DOMAIN)
+# POSTED STORAGE
 # =========================
+
 def load_posted(file):
     if not os.path.exists(file):
         return set()
@@ -117,6 +123,7 @@ def save_posted(file, posted):
 # =========================
 # CLEAN SUMMARY
 # =========================
+
 def clean_summary(text):
     if not text:
         return ""
@@ -127,8 +134,9 @@ def clean_summary(text):
     return text.strip()
 
 # =========================
-# FETCH NEWS (DOMAIN BASED)
+# FETCH NEWS (ALL DOMAINS TIGHT)
 # =========================
+
 def fetch_news(domain, posted):
     config = DOMAIN_CONFIGS[domain]
 
@@ -148,9 +156,41 @@ def fetch_news(domain, posted):
     if not data.get("articles"):
         return None
 
-    EXCLUDE_TERMS = [
-        "arrest", "interpol", "europol",
-        "sentenced", "trial", "court", "gang", "police"
+    GLOBAL_EXCLUDE = [
+        "arrest", "interpol", "europol", "sentenced",
+        "trial", "court", "gang", "police",
+        "election", "politics", "minister"
+    ]
+
+    AI_REQUIRED = [
+        "model", "ml", "machine learning", "llm",
+        "neural", "training", "inference",
+        "dataset", "algorithm", "software",
+        "platform", "enterprise"
+    ]
+
+    AI_EXCLUDE = [
+        "alien", "ufo", "extraterrestrial",
+        "nasa", "space", "astronomy",
+        "astrophysics", "interstellar", "seti"
+    ]
+
+    CLOUD_REQUIRED = [
+        "aws", "azure", "gcp", "cloud",
+        "infrastructure", "service",
+        "outage", "downtime", "region"
+    ]
+
+    DATA_REQUIRED = [
+        "pipeline", "etl", "elt", "warehouse",
+        "databricks", "snowflake", "bigquery",
+        "analytics", "data platform"
+    ]
+
+    DATA_EXCLUDE = [
+        "survey", "poll", "report says",
+        "government data", "census",
+        "statistics office"
     ]
 
     for article in data["articles"]:
@@ -160,8 +200,24 @@ def fetch_news(domain, posted):
 
         text = f"{article.get('title','').lower()} {article.get('description','').lower()}"
 
-        if any(x in text for x in EXCLUDE_TERMS):
+        if any(x in text for x in GLOBAL_EXCLUDE):
             continue
+
+        if domain == "ai":
+            if not any(x in text for x in AI_REQUIRED):
+                continue
+            if any(x in text for x in AI_EXCLUDE):
+                continue
+
+        if domain == "cloud":
+            if not any(x in text for x in CLOUD_REQUIRED):
+                continue
+
+        if domain == "data":
+            if not any(x in text for x in DATA_REQUIRED):
+                continue
+            if any(x in text for x in DATA_EXCLUDE):
+                continue
 
         if not article.get("urlToImage"):
             continue
@@ -178,6 +234,7 @@ def fetch_news(domain, posted):
 # =========================
 # LINKEDIN HELPERS
 # =========================
+
 def register_upload():
     url = "https://api.linkedin.com/v2/assets?action=registerUpload"
     payload = {
@@ -234,14 +291,17 @@ def create_post(domain, news, asset):
         "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"}
     }
 
-    r = requests.post("https://api.linkedin.com/v2/ugcPosts",
-                      headers={**HEADERS, "Content-Type": "application/json"},
-                      json=payload)
+    r = requests.post(
+        "https://api.linkedin.com/v2/ugcPosts",
+        headers={**HEADERS, "Content-Type": "application/json"},
+        json=payload
+    )
     return r.status_code == 201
 
 # =========================
 # MAIN
 # =========================
+
 if __name__ == "__main__":
     rotation_index = load_rotation_index()
     domain = DOMAINS[rotation_index % len(DOMAINS)]
