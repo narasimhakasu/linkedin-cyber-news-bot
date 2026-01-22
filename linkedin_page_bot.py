@@ -223,6 +223,8 @@ def fetch_news(domain, posted, global_posted):
 # =========================
 
 def register_upload():
+    url = "https://api.linkedin.com/v2/assets?action=registerUpload"
+
     payload = {
         "registerUploadRequest": {
             "recipes": ["urn:li:digitalmediaRecipe:feedshare-image"],
@@ -235,15 +237,29 @@ def register_upload():
     }
 
     r = requests.post(
-        "https://api.linkedin.com/v2/assets?action=registerUpload",
+        url,
         headers={**HEADERS, "Content-Type": "application/json"},
         json=payload
     )
-    data = r.json()["value"]
-    return (
-        data["uploadMechanism"]["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"]["uploadUrl"],
-        data["asset"]
-    )
+
+    if r.status_code != 200:
+        print("❌ registerUpload failed")
+        print("Status:", r.status_code)
+        print("Response:", r.text)
+        return None, None
+
+    data = r.json()
+    if "value" not in data:
+        print("❌ registerUpload missing 'value':", data)
+        return None, None
+
+    upload_url = data["value"]["uploadMechanism"][
+        "com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"
+    ]["uploadUrl"]
+
+    asset = data["value"]["asset"]
+    return upload_url, asset
+
 
 
 def upload_image(upload_url, image_url):
@@ -325,9 +341,14 @@ if __name__ == "__main__":
             continue
 
         upload_url, asset = register_upload()
+        if not upload_url or not asset:
+            print("Image registration failed, trying next domain.")
+            continue
+
         if not upload_image(upload_url, news["image_url"]):
             print("Image upload failed, trying next domain.")
             continue
+
 
         if create_post(domain, news, asset):
             domain_posted.add(news["link"])
@@ -343,4 +364,5 @@ if __name__ == "__main__":
 
     if not posted_successfully:
         print("❌ No article posted in this run.")
+
 
