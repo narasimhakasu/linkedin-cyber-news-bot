@@ -320,49 +320,48 @@ def create_post(domain, news, asset):
 # MAIN
 # =========================
 
+# =========================
+# MAIN (ONE POST PER DAY, STRICT ROTATION)
+# =========================
+
 if __name__ == "__main__":
     rotation_index = load_rotation_index()
     global_posted = load_json_set(GLOBAL_POSTED_FILE)
 
-    posted_successfully = False
+    # Pick today's domain ONLY
+    domain = DOMAINS[rotation_index % len(DOMAINS)]
+    print(f"📅 Today's domain: {domain}")
 
-    for i in range(len(DOMAINS)):
-        domain_index = (rotation_index + i) % len(DOMAINS)
-        domain = DOMAINS[domain_index]
+    domain_file = f"posted_articles_{domain}.json"
+    domain_posted = load_json_set(domain_file)
 
-        print(f"🔄 Trying domain: {domain}")
+    news = fetch_news(domain, domain_posted, global_posted)
 
-        domain_file = f"posted_articles_{domain}.json"
-        domain_posted = load_json_set(domain_file)
+    if not news:
+        print(f"❌ No valid article found for {domain}. No post today.")
+        # Move rotation forward anyway
+        save_rotation_index((rotation_index + 1) % len(DOMAINS))
+        exit(0)
 
-        news = fetch_news(domain, domain_posted, global_posted)
-        if not news:
-            print(f"No article for {domain}, moving on.")
-            continue
+    upload_url, asset = register_upload()
+    if not upload_url or not asset:
+        print("❌ Image registration failed. No post today.")
+        save_rotation_index((rotation_index + 1) % len(DOMAINS))
+        exit(0)
 
-        upload_url, asset = register_upload()
-        if not upload_url or not asset:
-            print("Image registration failed, trying next domain.")
-            continue
+    if not upload_image(upload_url, news["image_url"]):
+        print("❌ Image upload failed. No post today.")
+        save_rotation_index((rotation_index + 1) % len(DOMAINS))
+        exit(0)
 
-        if not upload_image(upload_url, news["image_url"]):
-            print("Image upload failed, trying next domain.")
-            continue
+    if create_post(domain, news, asset):
+        domain_posted.add(news["link"])
+        global_posted.add(news["link"])
 
+        save_json_set(domain_file, domain_posted)
+        save_json_set(GLOBAL_POSTED_FILE, global_posted)
 
-        if create_post(domain, news, asset):
-            domain_posted.add(news["link"])
-            global_posted.add(news["link"])
+        print(f"✅ Posted successfully for domain: {domain}")
 
-            save_json_set(domain_file, domain_posted)
-            save_json_set(GLOBAL_POSTED_FILE, global_posted)
-            save_rotation_index(domain_index + 1)
-
-            print(f"✅ Confirmed LinkedIn post for domain: {domain}")
-            posted_successfully = True
-            break
-
-    if not posted_successfully:
-        print("❌ No article posted in this run.")
-
-
+    # Always rotate to next domain for tomorrow
+    save_rotation_index((rotation_index + 1) % len(DOMAINS))
